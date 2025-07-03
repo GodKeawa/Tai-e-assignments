@@ -47,24 +47,40 @@ public class LiveVariableAnalysis extends
 
     @Override
     public SetFact<Var> newBoundaryFact(CFG<Stmt> cfg) {
-        // TODO - finish me
-        return null;
+        // TODO - finish me DONE
+        return new SetFact<>(); // 初始化都是空
     }
 
     @Override
     public SetFact<Var> newInitialFact() {
-        // TODO - finish me
-        return null;
+        // TODO - finish me DONE
+        return new SetFact<>();
     }
 
     @Override
     public void meetInto(SetFact<Var> fact, SetFact<Var> target) {
-        // TODO - finish me
+        // TODO - finish me DONE
+        target.union(fact); // may分析，直接union所有live变量
     }
 
     @Override
     public boolean transferNode(Stmt stmt, SetFact<Var> in, SetFact<Var> out) {
-        // TODO - finish me
-        return false;
+        // TODO - finish me DONE
+        // backward分析，从out计算in
+        SetFact<Var> oldIn = in.copy(); // 复制一份老的，用于比较最终是否有改变
+        in.set(out);    // 先将in设置成out，公式为 in = gen U (out - kill)
+        // 所有的def都kill掉
+        stmt.getDef().ifPresent(def -> {
+            if (def instanceof Var) {
+                in.remove((Var) def);   // LValue -> Var, cast is Safe
+            }
+        });
+
+        stmt.getUses().forEach(use -> {
+            if (use instanceof Var) {
+                in.add((Var) use);
+            }
+        });
+        return !in.equals(oldIn);   // true if changed
     }
 }

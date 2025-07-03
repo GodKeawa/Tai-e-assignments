@@ -26,6 +26,9 @@ import pascal.taie.analysis.dataflow.analysis.DataflowAnalysis;
 import pascal.taie.analysis.dataflow.fact.DataflowResult;
 import pascal.taie.analysis.graph.cfg.CFG;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+
 class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
 
     WorkListSolver(DataflowAnalysis<Node, Fact> analysis) {
@@ -34,11 +37,43 @@ class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
 
     @Override
     protected void doSolveForward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
-        // TODO - finish me
+        // TODO - finish me DONE
+        Deque<Node> worklist = new ArrayDeque<>();
+        for (Node n : cfg) {
+            if (!cfg.isEntry(n)) {
+                worklist.add(n);
+            }
+        }
+        while (!worklist.isEmpty()) {
+            Node work = worklist.getFirst();
+            worklist.removeFirst();
+            for (Node pred : cfg.getPredsOf(work)) {
+                analysis.meetInto(result.getOutFact(pred), result.getInFact(work));
+            }
+            if (analysis.transferNode(work, result.getInFact(work), result.getOutFact(work))) {
+                worklist.addAll(cfg.getSuccsOf(work));
+            }
+        }
     }
 
     @Override
     protected void doSolveBackward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
-        // TODO - finish me
+        // TODO - finish me DONE
+        Deque<Node> worklist = new ArrayDeque<>();
+        for (Node n : cfg) {
+            if (!cfg.isExit(n)) {
+                worklist.add(n);
+            }
+        }
+        while (!worklist.isEmpty()) {
+            Node work = worklist.getFirst();
+            worklist.removeFirst();
+            for (Node succ : cfg.getSuccsOf(work)) {
+                analysis.meetInto(result.getInFact(succ), result.getOutFact(work));
+            }
+            if (analysis.transferNode(work, result.getInFact(work), result.getOutFact(work))) {
+                worklist.addAll(cfg.getPredsOf(work));
+            }
+        }
     }
 }
