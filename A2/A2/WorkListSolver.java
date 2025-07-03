@@ -37,9 +37,9 @@ class WorkListSolver<Node, Fact> extends Solver<Node, Fact> {
 
     @Override
     protected void doSolveForward(CFG<Node> cfg, DataflowResult<Node, Fact> result) {
-        // TODO - finish me DONE
-        Deque<Node> worklist = new ArrayDeque<>(); // 必须引入一个双向的数据结构，当然也可以是更强的有序Set
-        for (Node n : cfg) { // Entry进去也是直接出来，没什么价值，虽然我认为判断Entry的代价也很高
+        // TODO - finish me
+        Deque<Node> worklist = new ArrayDeque<>();
+        for (Node n : cfg) {
             if (!cfg.isEntry(n)) {
                 worklist.add(n);
             }

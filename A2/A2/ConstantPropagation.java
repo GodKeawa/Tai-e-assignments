@@ -187,7 +187,7 @@ public class ConstantPropagation extends
                 int i2 = v2.getConstant();
                 return Value.makeConstant(evaluate(op, i1, i2));
             }
-            // 处理 zero * NAC,似乎OJ不考虑这种情况，实际上是返回0的
+            // handle zero * NAC by returning 0
 //            if (op == ArithmeticExp.Op.MUL
 //                    && (v1.isConstant() && v1.getConstant() == 0 && v2.isNAC() || // 0 * NAC
 //                    v2.isConstant() && v2.getConstant() == 0 && v1.isNAC())) { // NAC * 0
