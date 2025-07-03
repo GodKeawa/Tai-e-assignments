@@ -35,6 +35,7 @@ import pascal.taie.config.AnalysisConfig;
 import pascal.taie.ir.IR;
 import pascal.taie.ir.exp.*;
 import pascal.taie.ir.stmt.*;
+import pascal.taie.util.collection.Sets;
 
 import java.util.*;
 
@@ -58,100 +59,80 @@ public class DeadCodeDetection extends MethodAnalysis {
                 ir.getResult(LiveVariableAnalysis.ID);
         // keep statements (dead code) sorted in the resulting set
         Set<Stmt> deadCode = new TreeSet<>(Comparator.comparing(Stmt::getIndex));
-        // TODO - finish me
+        // TODO - finish me DONE
         // Your task is to recognize dead code in ir and add it to deadCode
         // 不可达代码处理，直接进行逻辑遍历，因为我们拿到了传播的常量，因此可以判断分支不可达的所有情况
         // 对于不可达的分支直接跳过，最后通过Set取差获取不可达代码
         // 无用赋值处理，可以等不可达代码处理完后对可达代码集合进行处理
         // 当然也可以聚合处理
-        Set<Stmt> reachableCode = new TreeSet<>(Comparator.comparing(Stmt::getIndex));
-        Deque<Stmt> worklist = new ArrayDeque<>();
-        Stmt entry = cfg.getEntry();
-        worklist.add(entry);
+        Set<Stmt> reachableCode = Sets.newSet(cfg.getNumberOfNodes());
+        Queue<Stmt> worklist = new ArrayDeque<>();
+        worklist.add(cfg.getEntry());
         while (!worklist.isEmpty()) {
-            Stmt work = worklist.pollFirst();
-            if (!reachableCode.contains(work)) {
-                reachableCode.add(work);
+            Stmt stmt = worklist.remove();
+            if (!reachableCode.contains(stmt)) {
+                reachableCode.add(stmt);
             } else {
                 continue;
             }
-            if (work instanceof DefinitionStmt) { // 还可能是invoke，但这里不管
-                cfg.getOutEdgesOf(work).forEach(edge -> {
-                   worklist.add(edge.getTarget());
-                });
-            } else if (work instanceof If) {
-                CPFact fact = constants.getInFact(work);
-                ConditionExp exp = ((If) work).getCondition();
-                Value result = ConstantPropagation.evaluate(exp, fact);
-                if (result.isConstant()) {
-                    boolean flag = result.getConstant() != 0;
-                    cfg.getOutEdgesOf(work).forEach(outEdge -> {
-                        if ((flag && outEdge.getKind() == Edge.Kind.IF_TRUE) || (!flag && outEdge.getKind() == Edge.Kind.IF_FALSE)) {
-                            worklist.add(outEdge.getTarget());
+            cfg.getOutEdgesOf(stmt).forEach(edge -> {
+                Stmt src = edge.getSource();
+                if (src instanceof If ifStmt) {
+                    Value cond = ConstantPropagation.evaluate(
+                            ifStmt.getCondition(), constants.getInFact(ifStmt));
+                    if (cond.isConstant()) {
+                        int v = cond.getConstant();
+                        if (v == 0 && edge.getKind() == Edge.Kind.IF_FALSE ||
+                                v == 1 && edge.getKind() == Edge.Kind.IF_TRUE) {
+                            worklist.add(edge.getTarget());
                         }
-                    });
-                } else {
-                    cfg.getOutEdgesOf(work).forEach(edge -> {
+                    } else {
                         worklist.add(edge.getTarget());
-                    });
-                }
-            } else if (work instanceof SwitchStmt) {
-                CPFact fact = constants.getInFact(work);
-                Var var = ((SwitchStmt) work).getVar();
-                Value value = ConstantPropagation.evaluate(var, fact);
-                if (value.isConstant()) {
-                    int num = value.getConstant();
-                    boolean defaultflag = true;
-                    Edge<Stmt> defaultedge = null;
-                    for (Edge<Stmt> outEdge : cfg.getOutEdgesOf(work)) {
-                        if (outEdge.getKind() == Edge.Kind.SWITCH_CASE) {
-                            if (outEdge.getCaseValue() == num) {
-                                defaultflag = false;
-                                worklist.add(outEdge.getTarget());
+                    }
+                } else if (src instanceof SwitchStmt switchStmt) {
+                    Value condV = ConstantPropagation.evaluate(
+                            switchStmt.getVar(), constants.getInFact(switchStmt));
+                    if (condV.isConstant()) {
+                        int v = condV.getConstant();
+                        if (edge.isSwitchCase()) {
+                            if (v == edge.getCaseValue()) {
+                                worklist.add(edge.getTarget());
                             }
-                        } else if (outEdge.getKind() == Edge.Kind.SWITCH_DEFAULT) {
-                            defaultedge = outEdge;
-                        } else {
-                            worklist.add(outEdge.getTarget());
+                        } else { // default case
+                            if (switchStmt.getCaseValues()
+                                    .stream()
+                                    .noneMatch(x -> x == v)) {
+                                worklist.add(edge.getTarget());
+                            }
                         }
-                    }
-                    if (defaultflag && defaultedge != null) {
-                        worklist.add(defaultedge.getTarget());
+                    } else {
+                        worklist.add(edge.getTarget());
                     }
                 } else {
-                    cfg.getOutEdgesOf(work).forEach(edge -> {
-                        worklist.add(edge.getTarget());
-                    });
-                }
-            } else {
-                cfg.getOutEdgesOf(work).forEach(edge -> {
                     worklist.add(edge.getTarget());
-                });
-            }
+                }
+            });
         }
-        // 现在解决reachable stmt中的无效赋值
-        Set<Stmt> uselessDef = new TreeSet<>(Comparator.comparing(Stmt::getIndex));
-        for (Stmt stmt : cfg) {
-            if (stmt instanceof DefinitionStmt) {
-                Optional<LValue> left = stmt.getDef();
-                if (left.isPresent()) {
-                    Var var = (Var) left.get();
-                    RValue right = ((DefinitionStmt<?, ?>) stmt).getRValue();
-                    SetFact<Var> fact = liveVars.getOutFact(stmt);
-                    if (!fact.contains(var) && hasNoSideEffect(right)) {
-                        uselessDef.add(stmt);
+
+        for (Stmt stmt : ir) {
+            if (stmt instanceof AssignStmt<?, ?> assign) {
+                if (assign.getLValue() instanceof Var lhs) {
+                    if (!liveVars.getOutFact(assign).contains(lhs) &&
+                            hasNoSideEffect(assign.getRValue())) {
+                        deadCode.add(stmt);
                     }
                 }
             }
         }
-        for (Stmt stmt : cfg) {
-//            System.out.println(stmt.toString() + " <Line>" + stmt.getLineNumber());
-            if (!reachableCode.contains(stmt) && stmt.getLineNumber() >= 0) {
-                deadCode.add(stmt);
+
+        if (reachableCode.size() < cfg.getNumberOfNodes()) {
+            // this means that some nodes are not reachable during traversal
+            for (Stmt s : ir) {
+                if (!reachableCode.contains(s)) {
+                    deadCode.add(s);
+                }
             }
         }
-        deadCode.addAll(uselessDef);
-
         return deadCode;
     }
 
