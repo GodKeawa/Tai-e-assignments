@@ -41,8 +41,7 @@ import pascal.taie.util.AnalysisException;
 import pascal.taie.language.type.Type;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
 
 class Solver {
 
@@ -175,7 +174,7 @@ class Solver {
      * Processes work-list entries until the work-list is empty.
      */
     private void analyze() {
-        // TODO - finish me
+        // TODO - finish me DONE
         while (!workList.isEmpty()) {
             WorkList.Entry entry = workList.pollEntry();
             Pointer p = entry.pointer();
