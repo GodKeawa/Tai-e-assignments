@@ -2,7 +2,7 @@
   options: {}
 - id: cspta
   options:
-    cs: 2-obj
+    cs: 2-call
     merge-string-constants: false
     merge-string-objects: false
     merge-string-builders: false
